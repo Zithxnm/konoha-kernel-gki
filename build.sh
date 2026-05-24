@@ -2,6 +2,16 @@
 set -e
 
 # ==========================================
+# Cleanup Trap
+# ==========================================
+cleanup() {
+    # Revert dynamic Baseband-guard modifications to keep git tree clean
+    git checkout security/Kconfig security/Makefile security/selinux/ 2>/dev/null || true
+    rm -f security/baseband-guard
+}
+trap cleanup EXIT
+
+# ==========================================
 # Konoha Kernel Build Script
 # Usage: ./build.sh [key=value ...]
 #   hz=100|250|1000       Timer frequency (default: 250)
