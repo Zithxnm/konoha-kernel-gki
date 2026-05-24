@@ -853,6 +853,25 @@ fix_ksu_next_susfs_umount() {
     fi
 }
 
+fix_ksu_late_loaded() {
+    # Restore ksu_late_loaded removed by SUSFS patch if still referenced
+    if [ -f "$INIT_C" ] && grep -q "ksu_late_loaded" "$INIT_C" 2>/dev/null && \
+       ! grep -q "bool ksu_late_loaded" "$INIT_C" 2>/dev/null; then
+        # Restore variable definition after ksu_cred
+        sed -i '/^struct cred \*ksu_cred;/a bool ksu_late_loaded;' "$INIT_C"
+        # Restore #ifdef MODULE initialization block before the debug block
+        sed -i '/^int __init kernelsu_init(void)/,/^{/{/^{/a\
+#ifdef MODULE\n\tksu_late_loaded = (current->pid != 1);\n#else\n\tksu_late_loaded = false;\n#endif
+}' "$INIT_C"
+        echo "[SUSFS-Fixup] init.c: Restored ksu_late_loaded definition and init"
+    fi
+    if [ -f "$KSU_H" ] && grep -q "ksu_late_loaded" "$INIT_C" 2>/dev/null && \
+       ! grep -q "ksu_late_loaded" "$KSU_H" 2>/dev/null; then
+        sed -i '/^extern struct cred \*ksu_cred;/a extern bool ksu_late_loaded;' "$KSU_H"
+        echo "[SUSFS-Fixup] ksu.h: Restored extern ksu_late_loaded"
+    fi
+}
+
 # ==========================================================================
 # [SHARED] selinux_hide.c — remove undefined context_struct_compute_av_fn
 # ==========================================================================
@@ -885,6 +904,7 @@ case "$MANAGER" in
         fix_sulog_type_mismatch
         fix_execveat_handlers
         fix_kprobe_supercall
+        fix_ksu_late_loaded
         ;;
     mambosu)
         fix_sulog_type_mismatch
@@ -922,22 +942,8 @@ SULOG_EXECVE_EOF
         if [ -f "$SULOG_EVENT_H" ] && ! grep -q "ksu_sulog_capture_root_execve" "$SULOG_EVENT_H" 2>/dev/null; then
             sed -i '/ksu_sulog_capture_sucompat/i struct ksu_sulog_pending_event *ksu_sulog_capture_root_execve(const char __user *filename_user, const char __user *const __user *argv_user, gfp_t gfp);' "$SULOG_EVENT_H"
         fi
-        # MamboSU: Restore ksu_late_loaded removed by SUSFS patch
-        if [ -f "$INIT_C" ] && grep -q "ksu_late_loaded" "$INIT_C" 2>/dev/null && \
-           ! grep -q "bool ksu_late_loaded" "$INIT_C" 2>/dev/null; then
-            # Restore variable definition after ksu_cred
-            sed -i '/^struct cred \*ksu_cred;/a bool ksu_late_loaded;' "$INIT_C"
-            # Restore #ifdef MODULE initialization block before the debug block
-            sed -i '/^int __init kernelsu_init(void)/,/^{/{/^{/a\
-#ifdef MODULE\n\tksu_late_loaded = (current->pid != 1);\n#else\n\tksu_late_loaded = false;\n#endif
-}' "$INIT_C"
-            echo "[SUSFS-Fixup] init.c: Restored ksu_late_loaded definition and init"
-        fi
-        if [ -f "$KSU_H" ] && grep -q "ksu_late_loaded" "$INIT_C" 2>/dev/null && \
-           ! grep -q "ksu_late_loaded" "$KSU_H" 2>/dev/null; then
-            sed -i '/^extern struct cred \*ksu_cred;/a extern bool ksu_late_loaded;' "$KSU_H"
-            echo "[SUSFS-Fixup] ksu.h: Restored extern ksu_late_loaded"
-        fi
+        
+        fix_ksu_late_loaded
         ;;
     ksu-next)
         fix_ksu_next_kbuild
