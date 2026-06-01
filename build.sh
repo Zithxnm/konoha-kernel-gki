@@ -46,6 +46,7 @@ for arg in "$@"; do
         kgsl_exploit=*) KGSL_EXPLOIT="${arg#*=}" ;;
         data_exploit=*) DATA_EXPLOIT="${arg#*=}" ;;
         droidspaces=*) DROIDSPACES="${arg#*=}" ;;
+        debug=*) DEBUG_MODE="${arg#*=}" ;;
     esac
 done
 
@@ -187,6 +188,17 @@ if [ -z "$DROIDSPACES" ]; then
     echo " 2) ON  (Add configs and kABI patches)"
     read -p "Enter choice [1-2] (default 1): " _c
     [ "${_c:-1}" == "2" ] && DROIDSPACES="on" || DROIDSPACES="off"
+fi
+
+# 9. Debug Mode
+if [ -z "$DEBUG_MODE" ]; then
+    echo "=========================================="
+    echo "               Debug Mode                 "
+    echo "=========================================="
+    echo " 1) OFF (default - full optimizations)"
+    echo " 2) ON  (nokaslr, no icf/merge-constants)"
+    read -p "Enter choice [1-2] (default 1): " _c
+    [ "${_c:-1}" == "2" ] && DEBUG_MODE="on" || DEBUG_MODE="off"
 fi
 
 # Set defaults for performance mods (all ON by default)
@@ -340,6 +352,7 @@ echo " HTSR 240Hz: ${HTSR^^}"
 echo " WiFi Exploit: ${WIFI_EXPLOIT^^}"
 echo " KGSL Exploit: ${KGSL_EXPLOIT^^}"
 echo " Data Exploit: ${DATA_EXPLOIT^^}"
+echo " Debug Mode:   ${DEBUG_MODE^^}"
 [ "$VARIANT" != "stock" ] && echo " Variant:   ${VARIANT} ($REPO_NAME)" || echo " Variant:   stock"
 echo " LTO:       ${LTO_TYPE^^}"
 if [ "$VARIANT" != "stock" ]; then
@@ -464,8 +477,6 @@ EXTREME_CLANG_FLAGS=(
     # functions & vectors
     # -ffunction-sections (causes ld.lld orphaned section errors in vmlinux)
     -fslp-vectorize
-    # -fdata-sections // error is being placed in '.init.bss.cmdline.o' section, which is not supported by the current linker script
-    -fmerge-all-constants
     -fdelete-null-pointer-checks
     -moutline 
     # No safeties (Raw Performance)
@@ -515,7 +526,12 @@ if [ "$DATA_EXPLOIT" == "on" ]; then
     KERNEL_KCFLAGS="$KERNEL_KCFLAGS -DCONFIG_DATA_EXPLOIT=1"
 fi
 
-KERNEL_LDFLAGS="-O2 --icf=all -mllvm -enable-new-pm=1"
+if [ "$DEBUG_MODE" == "off" ]; then
+    KERNEL_KCFLAGS="$KERNEL_KCFLAGS -fmerge-all-constants"
+    KERNEL_LDFLAGS="--icf=all"
+else
+    KERNEL_LDFLAGS=""
+fi
 
 if ! check_clang; then
     echo "[-] No Clang toolchain found!"
@@ -612,6 +628,9 @@ CURRENT_CMDLINE=$(grep '^CONFIG_CMDLINE=' "$OUT_DIR/.config" | sed 's/^CONFIG_CM
 CMDLINE_APPEND=""
 echo "$CURRENT_CMDLINE" | grep -q "kasan=off" || CMDLINE_APPEND="$CMDLINE_APPEND kasan=off"
 echo "$CURRENT_CMDLINE" | grep -q "panic_on_rcu_stall" || CMDLINE_APPEND="$CMDLINE_APPEND kernel.panic_on_rcu_stall=0"
+if [ "$DEBUG_MODE" == "on" ]; then
+    echo "$CURRENT_CMDLINE" | grep -q "nokaslr" || CMDLINE_APPEND="$CMDLINE_APPEND nokaslr"
+fi
 [ -n "$CMDLINE_APPEND" ] && \
     scripts/config --file "$OUT_DIR/.config" --set-str CONFIG_CMDLINE "$CURRENT_CMDLINE$CMDLINE_APPEND"
 
