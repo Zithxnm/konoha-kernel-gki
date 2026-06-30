@@ -235,7 +235,7 @@ jobs:
           git clone --depth=1 https://github.com/maxsteeel/nomount.git /tmp/nomount
           cd gki-clo
           
-          KERNEL_VERSION=$(head -n 2 Makefile | awk -F'=' '{print $2}' | tr -d ' ' | paste -sd '.' -)
+          KERNEL_VERSION=$(grep -E '^(VERSION|PATCHLEVEL)\s*=' Makefile | awk -F'=' '{print $2}' | tr -d ' ' | paste -sd '.' -)
           echo "Detected kernel version: $KERNEL_VERSION"
           
           PATCH_FILE="/tmp/nomount/kernel/patches/nomount_${KERNEL_VERSION}.patch"
