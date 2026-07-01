@@ -364,7 +364,7 @@ else
 fi
 
 # Run SUSFS fixup if needed (after root module is symlinked/created)
-if [ "$VARIANT" == "susfs" ] && [ "$VARIANT" != "stock" ]; then
+if [ "$VARIANT" == "susfs" ] && [ "$VARIANT" != "stock" ] && [ "$ROOT" != "resukisu" ]; then
     echo "[+] Running SUSFS compatibility fixup ($ROOT)..."
     bash "$KERNEL_DIR/ksu_susfs_fixup.sh" "$KERNEL_DIR/drivers/kernelsu" "$ROOT"
 fi
